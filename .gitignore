@@ -127,3 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Zajebancije i lokalna testiranja
+testiranje.py
