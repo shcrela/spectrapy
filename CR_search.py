@@ -46,6 +46,9 @@ def remove_cosmic_rays(spectra, sigma=None, sensitivity=1):
     cleaned spectra : ndarray
         The array of the same shape as the imput spectra, only normalized and
         (hopefully) with cosmic rays removed.
+    CR_cand_ind: ndarray
+        ndarray containing the indices of the initial spectra where the
+        cosmic rays were detected.
     '''
     nedim = np.ndim(spectra)
     if nedim == 3:
