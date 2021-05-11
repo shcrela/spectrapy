@@ -5,74 +5,108 @@ Created on Thu Mar 25 18:50:13 2021
 
 @author: dejan
 """
+import numpy as np
+from scipy.optimize import minimize_scalar
+from scipy.interpolate import interp1d
+from warnings import warn
 
+# %%
+def find_barycenter(x, y, method:str="trapz", precision:int=1):
+    """Calculate the index of the barycentre value.
 
-def find_barycentre(x, y, method="trapz_minimize"):
-    '''Calculates the index of the barycentre value.
-        Parameters:
-        ----------
-        x:1D ndarray: ndarray containing your raman shifts
-        y:1D ndarray: Ndarray containing your intensity (counts) values
-        method:string: only "trapz_minimize" for now
-        Returns:
-        ---------
-        (x_value, y_value): the coordinates of the barycentre
-        '''
-    assert(method in ['trapz_minimize'])#, 'sum_minimize', 'trapz_list'])
-    #razlika = np.asarray(np.diff(x, append=x[-1]+x[-1]-x[-2]), dtype=np.float16)
-    #assert(np.all(razlika/razlika[np.random.randint(len(x))] == np.ones_like(x))),\
-    #"your points are not equidistant"
-    half = np.trapz(y, x=x)/2
-    #from scipy.interpolate import interp1d
-    #xx=np.linspace(x.min(), x.max(), 2*len(x))
-    #f = interp1d(x, y, kind='quadratic')
-    #yy = f(xx)
-    if method in 'trapz_minimize':
-        def find_y(Y0, xx=x, yy=y, method=method):
-            '''Internal function to minimize
-            depending on the method chosen'''
-            # Calculate the area of the curve above the Y0 value:
-            part_up = np.trapz(yy[yy>=Y0]-Y0, x=xx[yy>=Y0])
-            # Calculate the area below Y0:
-            part_down = np.trapz(yy[yy<=Y0], x=xx[yy<=Y0])
-            # for the two parts to be the same
-            to_minimize_ud = np.abs(part_up - part_down)
-            # fto make the other part be close to half
-            to_minimize_uh = np.abs(part_up - half)
-            # to make the other part be close to half
-            to_minimize_dh = np.abs(part_down - half)
-            return to_minimize_ud**2+to_minimize_uh+to_minimize_dh
+    Parameters
+    ----------
+    x : 1D ndarray
+        Ndarray containing your raman shifts
+    y : 1D ndarray
+        Ndarray containing your intensity (counts) values
+    method : string
+        Only "trapz" or "list" are accepted for now
+    precision : int
+        The bigger the number you give, the more precise will the calculation
+        of the barycenter be. This may slow down the calculations. Usually,
+        changing this parameter to 2 should suffice.
 
-        def find_x(X0, xx=x, yy=y, method=method):
-            part_left = np.trapz(yy[xx<=X0], x=xx[xx<=X0])
-            part_right = np.trapz(yy[xx>=X0], x=xx[xx>=X0])
-            to_minimize_lr = np.abs(part_left - part_right)
-            to_minimize_lh = np.abs(part_left - half)
-            to_minimize_rh = np.abs(part_right - half)
-            return to_minimize_lr**2+to_minimize_lh+to_minimize_rh
+    Returns
+    ---------
+    (x_value, y_value) : tuple of 2 floats
+        the coordinates of the barycentre
+    """
+    def find_y(Y0, xx=x, yy=y, method=method):
+        """Construct a function to minimize over y-values.
 
+        After minimizing this function over y-values, you can obtain the
+        y-value of your barycenter.
+        """
+        # Calculate the area of the curve above the Y0 value:
+        part_up = np.trapz(yy[yy>=Y0]-Y0, x=xx[yy>=Y0])
+        # Calculate the area below Y0:
+        part_down = np.trapz(yy[yy<=Y0], x=xx[yy<=Y0])
+        # for the two parts to be the same
+        to_minimize_ud = np.abs(part_up - part_down)
+        # fto make the other part be close to half
+        to_minimize_uh = np.abs(part_up - half)
+        # to make the other part be close to half
+        to_minimize_dh = np.abs(part_down - half)
+        return to_minimize_ud**2+to_minimize_uh+to_minimize_dh
+
+    def find_x(X0, xx=x, yy=y, method=method):
+        """Construct a function to minimize over x-values.
+
+        After minimizing this function over x-values, you can obtain the
+        x-value of your barycenter.
+        """
+        part_left = np.trapz(yy[xx<=X0], x=xx[xx<=X0])
+        part_right = np.trapz(yy[xx>=X0], x=xx[xx>=X0])
+        to_minimize_lr = np.abs(part_left - part_right)
+        to_minimize_lh = np.abs(part_left - half)
+        to_minimize_rh = np.abs(part_right - half)
+        return to_minimize_lr**2+to_minimize_lh+to_minimize_rh
+
+    METHODS = ['trapz', 'list']
+    assert(method in METHODS), f"`method` parameter can only be one of {METHODS}"
+    razlika = np.gradient(x)
+    equidistant = np.allclose(razlika / razlika[0], 1)
+    if not equidistant and precision == 1:
+        warn("Your x-values are not equidistant.\n"
+        "They will be interpolated to twice their frequency,"
+        "and will be made equidistant.")
+        xx = np.linspace(x.min(), x.max(), 2*len(x))
+        f = interp1d(x, y, kind='quadratic')
+        yy = f(xx)
+    elif isinstance(precision, int) and precision > 1:
+        xx = np.linspace(x.min(), x.max(), precision*len(x))
+        f = interp1d(x, y, kind='quadratic')
+        yy = f(xx)
+    elif equidistant and precision == 1:
+        xx = x
+        yy = y
+    else:
+        raise ValueError("The `precision` parameter shoud be an integer.")    
+    
+    half = np.abs(np.trapz(yy, x=xx)/2)
+
+    if method == 'trapz':
         minimized_y = minimize_scalar(find_y, method='Bounded',
-                                    bounds=(np.quantile(y, 0.01),
-                                            np.quantile(y, 0.99)))
+                                    bounds=(np.quantile(yy, 0.01),
+                                            np.quantile(yy, 0.99)))
         minimized_x = minimize_scalar(find_x, method='Bounded',
-                                    bounds=(np.quantile(x, 0.01),
-                                            np.quantile(x, 0.99)))
+                                    bounds=(np.quantile(xx, 0.01),
+                                            np.quantile(xx, 0.99)))
         y_value = minimized_y.x
         x_value = minimized_x.x
 
-    elif method == "list_minimize":
+    elif method == "list":
+
         ys = np.sort(yy)
-        z2 = np.asarray(
-            [np.abs(np.trapz(yy[yy<=y_val], x=xx[yy<=y_val]) -\
-                    np.trapz(yy[yy>=y_val]-y_val, x=xx[yy>=y_val]))\
-             for y_val in ys])
-        y_value = ys[np.argmin(z2)]
-        x_ind = np.argmin(np.abs(np.cumsum(yy) - np.sum(yy)/2)) + 1
+        x_ind = np.argmin(np.abs(np.cumsum(yy) - half))
+        y_ind = np.argmin(np.abs(np.cumsum(ys) - half))
+        y_value = ys[y_ind]
         x_value = xx[x_ind]
 
     return x_value, y_value
 
-
+# %%
 def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
     '''Calculates the rolling median of an array
     along the given axis on the given window size.

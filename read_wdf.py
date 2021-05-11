@@ -14,9 +14,7 @@ import pandas as pd
 
 
 def convert_time(t):
-    '''
-    Takes the Windows 64bit timestamp and converts it
-    to human readable format
+    """Convert the Windows 64bit timestamp to human readable format.
 
     Input:
         t: timestamp in W64 format (default for .wdf files)
@@ -24,23 +22,20 @@ def convert_time(t):
         string formatted to suit local settings
 
     Example:
+    -------
         >>>time_of_spectrum_recording =
           [convert_time(x) for x in origins.iloc[:,4]]
 
         should give you the list with the times on which
         each specific spectrum was recorded
-        '''
+    """
     return time.strftime('%c', time.gmtime((t/1e7-11644473600)))
 
 
 def read_WDF(filename, verbose=False):
-    '''
-    Reads data from the binary .wdf file
-    and returns it in form of five variables
+    """Read the data from the binary .WDF file.
 
-    Example:
-         >>>spectra, x_values, params, map_params, origins =
-         read_WDF(filename)
+    Returns the data in five Python-readable variables.
 
     Input:
         filename: The complete (relative or absolute) path to the file
@@ -54,8 +49,12 @@ def read_WDF(filename, verbose=False):
                      coordinates of each recording.
                      Note that it has triple column names
                      (label, data type, data units)
-    '''
 
+    Example:
+    -------
+         >>>spectra, x_values, params, map_params, origins =
+         read_WDF(filename)
+    """
     DATA_TYPES = ['Arbitrary', 'Spectral', 'Intensity',
                   'SpatialX', 'SpatialY', 'SpatialZ',
                   'SpatialR', 'SpatialTheta', 'SpatialPhi',
