@@ -119,7 +119,7 @@ def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
     return median_filter(arr, size=shape, mode=mode, *args)
 
 
-@jit(nopython=True, parallel=True)
+
 def baseline_als(y, lam=1e5, p=5e-5, niter=12):
     '''Adapted from:
     https://stackoverflow.com/questions/29156532/python-baseline-correction-library.
@@ -172,17 +172,12 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
             w = p * (yi > z) + (1-p) * (yi < z)
         return z
 
-    b_line = []
-    for i in range(y.shape[0]):
-        b_line.append(_one_bl[y[i]])
-# =============================================================================
-#     if y.ndim == 1:
-#         b_line = _one_bl(y)
-#     elif y.ndim == 2:
-#         b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i])
-#                                                 for i in tqdm(range(y.shape[0]))))
-#     else:
-#         warn("This only works for 1D or 2D arrays")
-# =============================================================================
+    if y.ndim == 1:
+        b_line = _one_bl(y)
+    elif y.ndim == 2:
+        b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i])
+                                                for i in range(y.shape[0])))
+    else:
+        warn("This only works for 1D or 2D arrays")
 
     return b_line
