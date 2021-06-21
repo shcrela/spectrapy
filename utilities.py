@@ -23,7 +23,7 @@ class AdjustCR_SearchSensitivity(object):
     The graph shows the number and the distribution of CR candidates along the
     Raman shifts' axis. You can manually adjust the sensitivity
     (left=more sensitive, right=less sensitive)
-    
+
     The usage example is the following:
     ---------------------------------------
     >>># first you show the graph and set for the appropriate sensitivity value:
@@ -33,7 +33,7 @@ class AdjustCR_SearchSensitivity(object):
     >>>CR_spectra_ind = my_class_instance.CR_spectra_ind
     >>>mask_CR_cand = my_class_instance.mask_CR_cand
     >>>mask_whole = my_class_instance.mask_whole
-    
+
     The recovered values are:
     CR_spectra_ind: 1D ndarray of ints: The indices of the spectra containing
                                         the Cosmic Rays.
@@ -45,9 +45,9 @@ class AdjustCR_SearchSensitivity(object):
     mask_whole: 2D ndarray of bools::   Boolean mask of the same shape as the
                                         input spectra. True where the CRs are.
     """
-    
-    
-    
+
+
+
     def __init__(self, spectra, x_values=None, gradient_axis=-1):
         self.osa = gradient_axis
         self.spectra = spectra
@@ -75,17 +75,17 @@ class AdjustCR_SearchSensitivity(object):
         # Calling the "press" function on keypress event
         # (only arrow keys left and right work)
         self.fig.canvas.mpl_connect('key_press_event', self.press)
-        self.CR_spectra_ind, self.mask_whole, self.mask_CR_cand = self.calculate_mask(8)    
+        self.CR_spectra_ind, self.mask_whole, self.mask_CR_cand = self.calculate_mask(8)
         self.line, = self.ax.plot(self.x_values, np.sum(self.mask_whole, axis=-0))
         self.ax.set_title(f"Found {len(self.CR_spectra_ind)} cosmic rays")
         plt.show()
-        
+
     def calculate_mask(self, CR_coeff):
         self.uslov=CR_coeff*self.nabla_dev[:, np.newaxis]
         # find the indices of the potential CR candidates:
         self.cand_spectra, self.cand_sigma =\
                                     np.nonzero(np.abs(self.nabla) > self.uslov)
-        
+
         # indices of spectra containing the CR candidates:
         self.CR_spectra_ind = np.unique(self.cand_spectra)
         # we construct the mask with zeros everywhere except on the positions of CRs:
@@ -98,10 +98,10 @@ class AdjustCR_SearchSensitivity(object):
                                 structure=np.ones((1,self.ws)))
         self.mask_whole[self.CR_spectra_ind] = self.mask_CR_cand
         return self.CR_spectra_ind, self.mask_whole, self.mask_CR_cand
-        
-        
-    
-    
+
+
+
+
     def update(self, val):
         '''This function is for using the slider to scroll through frames'''
         self.CR_coeff = self.sframe.val
@@ -498,10 +498,7 @@ class AllMaps(object):
                              self.first_frame, self.last_frame,
                              valinit=self.first_frame, valfmt='%d', valstep=1)
 
-
-
-        self.my_cbar = mpl.colorbar.colorbar_factory(self.cbax, self.im)
-
+        self.my_cbar = mpl.colorbar.Colorbar(self.cbax, self.im)
         self.sframe.on_changed(self.update) # calls the "update" function when changing the slider position
         # Calling the "press" function on keypress event
         # (only arrow keys left and right work)
@@ -559,38 +556,53 @@ class AllMaps(object):
 # %%
 
 class NavigationButtons(object):
-    '''This class allows you to visualize multispectral data and
+    """This class allows you to visualize multispectral data and
     navigate trough your spectra simply by clicking on the
     navigation buttons on the graph.
-    -------------------
+
     Parameters:
-        sigma: 1D numpy array of your x-values (raman shifts, par ex.)
-        spectra: 3D or 2D ndarray of shape (n_spectra, len(sigma), n_curves).
-                 The last dimension may be ommited it there is only one curve
-                 to be plotted for each spectra),
-        autoscale: bool determining if you want to adjust the scale to each spectrum
-        title: The initial title describing where the spectra comes from
-        label: list: A list explaining each of the curves. len(label) = n_curves
+    ---------------
+        sigma : 1D ndarray
+            array of your x-values (raman shifts, par ex.)
+        spectra: 3D or 2D ndarray
+            array of shape (n_spectra, len(sigma), n_curves).
+            The last dimension may be ommited it there is only one curve
+            to be plotted for each spectra),
+        autoscale: bool
+            determins if you want to adjust the scale to each spectrum
+        title:
+            The initial title describing where the spectra comes from
+        label: list
+            A list explaining each of the curves. len(label) = n_curves
+
     Output:
+    --------------
         matplotlib graph with navigation buttons to cycle through spectra
+
     Example:
-    # Let's say you have a ndarray containing 10 spectra, each 500 points long
-    # base_spectras.shape should give (10, 500)
-    # your sigma.shape should be (500, )
-    # Then let's say you fitted each of your spectra with 3 gaussian peaks
-    # and you want to plot these as well. For each of your ten spectra,
-    # you will have something like:
-    >>>spectra_fitted[i] = multiple_gaussian_function(sigma, *params[i])
-    # your spectra_fitted should have the same shape as your spectra.
-    # Now, let's say you want also to plot each of the gaussian peaks as well
-    # for "i"th spectra you will have 3 gaussians
-    >>>for k in range(3):
-    >>>G[i][k] = single_gaussian_function(sigma, *params[i][k])
-    # At the end, you stack all of this in one ndarray :
-    >>>multiple_curves_to_plot = np.stack((
+    -------------
+    Let's say you have a ndarray containing 10 spectra, each 500 points long
+    base_spectras.shape should give (10, 500)
+    your sigma.shape should be (500, )
+    Then let's say you fitted each of your spectra with 3 gaussian peaks
+    and you want to plot these as well. For each of your ten spectra,
+    you will have something like:
+
+    >>> spectra_fitted[i] = multiple_gaussian_function(sigma, *params[i])
+
+    Your spectra_fitted should have the same shape as your spectra.
+    Now, let's say you want also to plot each of the gaussian peaks as well
+    for "i"th spectra you will have 3 gaussians.
+
+    >>> for k in range(3):
+    >>> G[i][k] = single_gaussian_function(sigma, *params[i][k])
+
+    At the end, you stack all of this in one ndarray :
+
+    >>> multiple_curves_to_plot = np.stack((
             base_spectras, spectra_fitted, G1, G2, G3), axis=-1)
-    >>>NavigationButtons(sigma, multiple_curves_to_plot)
-    '''
+    >>> NavigationButtons(sigma, multiple_curves_to_plot)
+    """
     ind = 0
 
     def __init__(self, sigma, spectra, autoscale_y=False, title='Spectrum', label=False,

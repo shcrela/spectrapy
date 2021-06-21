@@ -5,51 +5,63 @@ Created on Thu Mar 25 18:50:13 2021
 
 @author: dejan
 """
+import numpy as np
+from scipy import sparse
+from scipy.optimize import minimize_scalar
+from joblib import delayed, Parallel
+from tqdm import tqdm
+from numba import jit
 
+def find_barycentre(x, y, method='simple vectorized'):
+    '''Calculate the coordinates of the barycentre value.
 
-def find_barycentre(x, y, method="trapz_minimize"):
-    '''Calculates the index of the barycentre value.
         Parameters:
         ----------
-        x:1D ndarray: ndarray containing your raman shifts
-        y:1D ndarray: Ndarray containing your intensity (counts) values
-        method:string: only "trapz_minimize" for now
+        x:1D ndarray
+            ndarray containing your raman shifts
+        y:1D ndarray
+            Ndarray containing your intensity (counts) values
+        method:string
+            only "trapz_minimize" for now
+
         Returns:
         ---------
         (x_value, y_value): the coordinates of the barycentre
         '''
-    assert(method in ['trapz_minimize'])#, 'sum_minimize', 'trapz_list'])
-    #razlika = np.asarray(np.diff(x, append=x[-1]+x[-1]-x[-2]), dtype=np.float16)
-    #assert(np.all(razlika/razlika[np.random.randint(len(x))] == np.ones_like(x))),\
-    #"your points are not equidistant"
-    half = np.trapz(y, x=x)/2
-    #from scipy.interpolate import interp1d
-    #xx=np.linspace(x.min(), x.max(), 2*len(x))
-    #f = interp1d(x, y, kind='quadratic')
-    #yy = f(xx)
-    if method in 'trapz_minimize':
+    assert(method in ['trapz_minimize', 'list_minimize', 'weighted_mean', 'simple vectorized'])
+    if x[0] == x[-1]:
+        return x, y/2
+    if method == 'trapz_minimize':
+        half = np.abs(np.trapz(y, x=x)/2)
         def find_y(Y0, xx=x, yy=y, method=method):
-            '''Internal function to minimize
-            depending on the method chosen'''
+            """Internal function to minimize
+            depending on the method chosen"""
             # Calculate the area of the curve above the Y0 value:
-            part_up = np.trapz(yy[yy>=Y0]-Y0, x=xx[yy>=Y0])
+            part_up = np.abs(np.trapz(
+                                    yy[yy >= Y0] - Y0,
+                                    x = xx[yy >= Y0]))
             # Calculate the area below Y0:
-            part_down = np.trapz(yy[yy<=Y0], x=xx[yy<=Y0])
+            part_down = np.abs(np.trapz(
+                                    yy[yy <= Y0],
+                                    x = xx[yy <= Y0]))
             # for the two parts to be the same
             to_minimize_ud = np.abs(part_up - part_down)
             # fto make the other part be close to half
             to_minimize_uh = np.abs(part_up - half)
             # to make the other part be close to half
             to_minimize_dh = np.abs(part_down - half)
-            return to_minimize_ud**2+to_minimize_uh+to_minimize_dh
+            return to_minimize_ud**2 + to_minimize_uh + to_minimize_dh
 
         def find_x(X0, xx=x, yy=y, method=method):
-            part_left = np.trapz(yy[xx<=X0], x=xx[xx<=X0])
-            part_right = np.trapz(yy[xx>=X0], x=xx[xx>=X0])
+            part_left = np.abs(np.trapz(
+                                    yy[xx <= X0],
+                                    x = xx[xx <= X0]))
+            part_right = np.abs(np.trapz(yy[xx >= X0],
+                                         x = xx[xx >= X0]))
             to_minimize_lr = np.abs(part_left - part_right)
             to_minimize_lh = np.abs(part_left - half)
             to_minimize_rh = np.abs(part_right - half)
-            return to_minimize_lr**2+to_minimize_lh+to_minimize_rh
+            return to_minimize_lr**2 + to_minimize_lh + to_minimize_rh
 
         minimized_y = minimize_scalar(find_y, method='Bounded',
                                     bounds=(np.quantile(y, 0.01),
@@ -61,15 +73,30 @@ def find_barycentre(x, y, method="trapz_minimize"):
         x_value = minimized_x.x
 
     elif method == "list_minimize":
+        yy = y
+        xx = x
         ys = np.sort(yy)
         z2 = np.asarray(
-            [np.abs(np.trapz(yy[yy<=y_val], x=xx[yy<=y_val]) -\
-                    np.trapz(yy[yy>=y_val]-y_val, x=xx[yy>=y_val]))\
+            [np.abs(np.trapz(yy[yy <= y_val], x = xx[yy <= y_val]) -\
+                    np.trapz(yy[yy >= y_val] - y_val, x = xx[yy >= y_val]))\
              for y_val in ys])
         y_value = ys[np.argmin(z2)]
         x_ind = np.argmin(np.abs(np.cumsum(yy) - np.sum(yy)/2)) + 1
         x_value = xx[x_ind]
 
+    elif method == 'weighted_mean':
+        weighted_sum = np.dot(y,x)
+        x_value = weighted_sum / np.sum(y)
+        y_value = weighted_sum / np.sum(x)
+
+    elif method == 'simple vectorized':
+        xgrad = np.gradient(x)
+        proizvod  = y * xgrad
+        sumprod = np.cumsum(proizvod, axis=-1)
+        medo = np.median(sumprod, axis=-1, keepdims=True) # this should be half area
+        ind2 = np.argmin(np.abs(sumprod-medo), axis=-1)
+        x_value = x[ind2]
+        y_value = sumprod[:,-1]/(x[-1]-x[0])
     return x_value, y_value
 
 
@@ -92,7 +119,7 @@ def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
     return median_filter(arr, size=shape, mode=mode, *args)
 
 
-
+@jit(nopython=True, parallel=True)
 def baseline_als(y, lam=1e5, p=5e-5, niter=12):
     '''Adapted from:
     https://stackoverflow.com/questions/29156532/python-baseline-correction-library.
@@ -145,12 +172,17 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
             w = p * (yi > z) + (1-p) * (yi < z)
         return z
 
-    if y.ndim == 1:
-        b_line = _one_bl(y)
-    elif y.ndim == 2:
-        b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i])
-                                                for i in range(y.shape[0])))
-    else:
-        warn("This only works for 1D or 2D arrays")
+    b_line = []
+    for i in range(y.shape[0]):
+        b_line.append(_one_bl[y[i]])
+# =============================================================================
+#     if y.ndim == 1:
+#         b_line = _one_bl(y)
+#     elif y.ndim == 2:
+#         b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i])
+#                                                 for i in tqdm(range(y.shape[0]))))
+#     else:
+#         warn("This only works for 1D or 2D arrays")
+# =============================================================================
 
     return b_line
