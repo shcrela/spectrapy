@@ -10,7 +10,7 @@ from scipy import sparse
 from scipy.optimize import minimize_scalar
 from joblib import delayed, Parallel
 from tqdm import tqdm
-from numba import jit
+
 
 def find_barycentre(x, y, method='simple vectorized'):
     '''Calculate the coordinates of the barycentre value.
@@ -171,12 +171,12 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
             z = sparse.linalg.spsolve(Z, w*yi)
             w = p * (yi > z) + (1-p) * (yi < z)
         return z
-
+    
     if y.ndim == 1:
         b_line = _one_bl(y)
     elif y.ndim == 2:
         b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i])
-                                                for i in range(y.shape[0])))
+                                         for i in tqdm(range(y.shape[0]))))
     else:
         warn("This only works for 1D or 2D arrays")
 
