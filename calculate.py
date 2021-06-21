@@ -30,7 +30,7 @@ def find_barycentre(x, y, method='simple vectorized'):
         '''
     assert(method in ['trapz_minimize', 'list_minimize', 'weighted_mean', 'simple vectorized'])
     if x[0] == x[-1]:
-        return x, y/2
+        return x*np.ones(len(y)), y/2
     if method == 'trapz_minimize':
         half = np.abs(np.trapz(y, x=x)/2)
         def find_y(Y0, xx=x, yy=y, method=method):
@@ -86,7 +86,7 @@ def find_barycentre(x, y, method='simple vectorized'):
 
     elif method == 'weighted_mean':
         weighted_sum = np.dot(y,x)
-        x_value = weighted_sum / np.sum(y)
+        x_value = weighted_sum / np.sum(y, axis=-1)
         y_value = weighted_sum / np.sum(x)
 
     elif method == 'simple vectorized':

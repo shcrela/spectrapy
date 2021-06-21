@@ -600,7 +600,7 @@ class ShowSelected(object):
             return self.reduced_x[np.argmax(reduced_spectra,
                              axis=-1)].reshape(self.ny, self.nx)
         elif self.func == "barycenter x":
-            return find_barycentre(self.reduced_x, reduced_spectra)[0].reshape(self.ny, self.nx)
+            return find_barycentre(self.reduced_x, reduced_spectra, method="weighted_mean")[0].reshape(self.ny, self.nx)
 
     def onselect(self, xmin, xmax):
         self.xmin = xmin
