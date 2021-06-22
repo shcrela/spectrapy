@@ -593,9 +593,12 @@ class ShowSelected(object):
             return np.max(reduced_spectra,
                           axis=-1).reshape(self.ny, self.nx)
         elif self.func == "area":
-            return np.trapz(reduced_spectra,
-                            x=self.reduced_x
-                            ).reshape(self.ny, self.nx)
+            if np.ptp(self.reduced_x) == 0:
+                return np.ones((self.ny, self.nx))
+            else:
+                return np.trapz(reduced_spectra,
+                                x=self.reduced_x
+                                ).reshape(self.ny, self.nx)
         elif self.func == "peak position":
             return self.reduced_x[np.argmax(reduced_spectra,
                              axis=-1)].reshape(self.ny, self.nx)

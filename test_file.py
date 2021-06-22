@@ -6,12 +6,13 @@ Created on Fri Mar 26 16:36:18 2021
 @author: dejan
 """
 import numpy as np
-from read_WDF import read_WDF
 import calculate as cc
 import visualize as vis
 import simulate as sim
 
 # %% Create some data:
+# (You should replace this whole part and load your own spectra.)
+
 x_values = np.linspace(150, 1300, 1015) # Create 1015 equally spaced points
 
 # initial peak parameters:
@@ -20,7 +21,7 @@ mpar = [[40, 220, 100], # h, x0, w, r
         [164, 550, 160],
         [40, 480, 340],
         [123, 550],
-        [235, 900, 1300]]
+        [435, 900, 1300]]
 
 spectra = sim.create_multiple_spectra(x_values, mpar,
                                       noise=0.2, noise_bias='smiley')
