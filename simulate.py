@@ -167,22 +167,26 @@ def create_multiple_spectra(x: np.ndarray, initial_peak_params: list,
                     0.5]
     for i, par in enumerate(initial_peak_params):
         while len(par) < len(defaults):
+            protektor = np.copy(len(par))
             initial_peak_params[i].append(defaults[len(par)])
+            if len(par) == protektor:
+                print("!!!!!!!!!!!!!!!!!!!!!")
     n_peaks = len(initial_peak_params)  # Number of peaks
-    ponderation = 1 + (np.random.rand(N, len(defaults), 1) - 0.5) * noise
+    ponderation = 1 + (np.random.rand(N, n_peaks, 1) - 0.5) * noise
     peaks_params = ponderation * np.asarray(initial_peak_params)
     # -------- The funny part ----------------------------------
     if noise_bias == 'smiley':
         smile = io.imread('./misc/bibi.jpg')
         x_dim = int(np.sqrt(N))
         y_dim = N//x_dim
-        print(f"You'll end up with {x_dim}*{y_dim} = {x_dim*y_dim} points"
-              f"instead of initial {N}")
-        N = x_dim * y_dim
+        if x_dim*y_dim != N:
+            print(f"You'll end up with {x_dim}*{y_dim} = {x_dim*y_dim} points "
+                  f"instead of initial {N}")
+            N = x_dim * y_dim
         smile_resized = transform.resize(smile, (x_dim, y_dim))
         noise_bias = smile_resized.ravel()
         if funny_peak == 'random':
-            funny_peak = np.random.randint(0, n_peaks+1)
+            funny_peak = np.random.randint(0, n_peaks)
         elif funny_peak == 'all':
             funny_peak = list(range(n_peaks))
         peaks_params[:, funny_peak, 0] *= noise_bias

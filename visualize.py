@@ -12,7 +12,7 @@ from skimage import io, transform
 from matplotlib.widgets import Slider, Button, AxesWidget, RadioButtons, SpanSelector
 from matplotlib.patches import Circle
 from warnings import warn
-from calculate import find_barycentre
+import calculate as cc
 
 class ShowCollection(object):
     """Visualize a collection of images.
@@ -248,7 +248,7 @@ class AllMaps(object):
 
 class ShowSpectra(object):
     """Rapidly visualize Raman spectra.
-    
+
     Imortant: Your spectra can either be a 2D ndarray
     (1st dimension is for counting the spectra, the 2nd dimension is for the intensities)
     And that would be the standard use-case, But:
@@ -600,7 +600,9 @@ class ShowSelected(object):
             return self.reduced_x[np.argmax(reduced_spectra,
                              axis=-1)].reshape(self.ny, self.nx)
         elif self.func == "barycenter x":
-            return find_barycentre(self.reduced_x, reduced_spectra, method="weighted_mean")[0].reshape(self.ny, self.nx)
+            return cc.find_barycentre(self.reduced_x, reduced_spectra,
+                                      method="weighted_mean"
+                                      )[0].reshape(self.ny, self.nx)
 
     def onselect(self, xmin, xmax):
         self.xmin = xmin
@@ -634,3 +636,102 @@ class ShowSelected(object):
 
     def titled(self, ax, frame):
         ax.set_title(f"Spectrum N° {frame} /{self.last_frame + 1}")
+
+class FindBaseline(object):
+    """Visualy adjust parameters for the baseline.
+
+    Parameters
+    ----------
+    my_spectra: 2D ndarray
+
+    Returns
+    -------
+    The interactive graph facilitating the parameter search.
+    You can later recover the parameters with:
+        MyFindBaselineInstance.p_val
+        MyFindBaselineInstance.lam_val
+
+    Note that you can use the same function for smoothing
+    (by setting the `p_val` to 0.5 and `lam_val` to some "small" value (like 13))
+    """
+
+    def __init__(self, my_spectra, sigma=None, **kwargs):
+        if my_spectra.ndim == 1:
+            self.my_spectra = my_spectra[np.newaxis, :]
+        else:
+            self.my_spectra = my_spectra
+        if sigma is None:
+            self.sigma = np.arange(my_spectra.shape[1])
+        else:
+            assert my_spectra.shape[-1] == len(
+                sigma), "Check your Raman shifts array"
+            self.sigma = sigma
+
+        self.nb_spectra = len(self.my_spectra)
+        self.current_spectrum = self.my_spectra[0]
+        self.title = kwargs.get('title', None)
+        self.p_val = 5e-5
+        self.lam_val = 1e5
+
+        self.fig = plt.figure(figsize=(14, 10))
+        # Add all the axes:
+        self.ax = self.fig.add_axes([.2, .15, .75, .8]) # [left, bottom, width, height]
+        self.axpslider = self.fig.add_axes([.05, .15, .02, .8], yscale='log')
+        self.axlamslider = self.fig.add_axes([.1, .15, .02, .8], yscale='log')
+        if self.nb_spectra > 1: # scroll through spectra if there are many
+            self.axspectrumslider = self.fig.add_axes([.2, .05, .75, .02])
+            self.spectrumslider = Slider(self.axspectrumslider, 'Frame',
+                                         0, self.nb_spectra-1,
+                                         valinit=0, valfmt='%d', valstep=1)
+            self.spectrumslider.on_changed(self.spectrumupdate)
+
+        self.pslider = Slider(self.axpslider, 'p-value',
+                                     1e-10, 1, valfmt='%.2g',
+                                     valinit=self.p_val,
+                                     orientation='vertical')
+        self.lamslider = Slider(self.axlamslider, 'lam-value',
+                                     .1, 1e10, valfmt='%.2g',
+                                     valinit=self.lam_val,
+                                     orientation='vertical')
+        self.pslider.on_changed(self.blupdate)
+        self.lamslider.on_changed(self.blupdate)
+
+        self.spectrumplot, = self.ax.plot(self.sigma, self.current_spectrum,
+                                          label="original spectrum")
+        self.bl = cc.baseline_als(self.current_spectrum, p=self.p_val,
+                                  lam=self.lam_val)
+        self.blplot, = self.ax.plot(self.sigma, self.bl, label="baseline")
+        self.corrplot, = self.ax.plot(self.sigma,
+                                      self.current_spectrum - self.bl,
+                                      label="corrected_plot")
+        self.ax.legend()
+        self.titled(0)
+
+        plt.show()
+
+    def titled(self, frame):
+        if self.title is None:
+            self.ax.set_title(f"Spectrum N° {frame} /{self.nb_spectra}")
+        else:
+            self.ax.set_title(f"{self.title} n°{frame}")
+
+    def spectrumupdate(self, val):
+        """Use the slider to scroll through frames"""
+        frame = int(self.spectrumslider.val)
+        self.current_spectrum = self.my_spectra[frame]
+        self.spectrumplot.set_ydata(self.current_spectrum)
+        self.blupdate(val)
+        self.ax.relim()
+        self.ax.autoscale_view()
+        self.titled(frame)
+        self.fig.canvas.draw_idle()
+
+    def blupdate(self, val):
+        self.p_val = self.pslider.val
+        self.lam_val = self.lamslider.val
+        self.bl = cc.baseline_als(self.current_spectrum, p=self.p_val, lam=self.lam_val)
+        self.blplot.set_ydata(self.bl)
+        self.corrplot.set_ydata(self.current_spectrum - self.bl)
+        self.ax.relim()
+        self.ax.autoscale_view()
+        self.fig.canvas.draw_idle()

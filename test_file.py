@@ -6,10 +6,27 @@ Created on Fri Mar 26 16:36:18 2021
 @author: dejan
 """
 import numpy as np
-import visualize as vis
 from read_WDF import read_WDF
+import calculate as cc
+import visualize as vis
+import simulate as sim
 
-filename = "../Data/blah/blah/blahblah.wdf"
-spectra, x_values, params, map_params, origins = read_WDF(filename, verbose=False)
-nx, ny = [v for v in map_params["NbSteps"] if v > 1]
-gle = vis.ShowSelected(spectra.reshape(ny,nx,-1), x_values);
+# %% Create some data:
+x_values = np.linspace(150, 1300, 1015) # Create 1015 equally spaced points
+
+# initial peak parameters:
+mpar = [[40, 220, 100], # h, x0, w, r
+        [122, 440, 80],
+        [164, 550, 160],
+        [40, 480, 340],
+        [123, 550],
+        [235, 900, 1300]]
+
+spectra = sim.create_multiple_spectra(x_values, mpar,
+                                      noise=0.2, noise_bias='smiley')
+
+# %% This cell illustrates the different measurements for the map scans
+gle = vis.ShowSelected(spectra.reshape(100,100,-1), x_values);
+
+# %% This cell illustrates the search for the baseline:
+bl = vis.FindBaseline(spectra, x_values)
