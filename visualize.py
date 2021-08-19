@@ -13,6 +13,10 @@ from matplotlib.widgets import Slider, Button, AxesWidget, RadioButtons, SpanSel
 from matplotlib.patches import Circle
 from warnings import warn
 import calculate as cc
+import preprocessing as pp
+from read_WDF_class import WDF
+
+
 
 class ShowCollection(object):
     """Visualize a collection of images.
@@ -138,13 +142,19 @@ class AllMaps(object):
 
     def __init__(self, map_spectra, sigma=None, components=None,
                  components_sigma=None, **kwargs):
-        self.map_spectra = map_spectra
-        if sigma is None:
-            self.sigma = np.arange(map_spectra.shape[-1])
+        if isinstance(map_spectra, WDF):
+            shape = map_spectra.map_params['NbSteps'][
+                    map_spectra.map_params['NbSteps'] > 1][::-1]
+            self.map_spectra = map_spectra.spectra.reshape(tuple(shape) + (-1,))
+            self.sigma = map_spectra.x_values
         else:
-            assert map_spectra.shape[-1] == len(
-                sigma), "Check your Ramans shifts array"
+            self.map_spectra = map_spectra
             self.sigma = sigma
+            if sigma is None:
+                self.sigma = np.arange(map_spectra.shape[-1])
+        assert self.map_spectra.shape[-1] == len(
+                self.sigma), "Check your Ramans shifts array"
+
         self.first_frame = 0
         self.last_frame = len(self.sigma)-1
         if components is not None:
@@ -265,16 +275,23 @@ class ShowSpectra(object):
     """
 
     def __init__(self, my_spectra, sigma=None, **kwargs):
-        if my_spectra.ndim == 2:
-            self.my_spectra = my_spectra[:,:,np.newaxis]
+
+        if isinstance(my_spectra, WDF):
+            self.my_spectra = my_spectra.spectra
+            self.sigma = my_spectra.x_values
         else:
             self.my_spectra = my_spectra
-        if sigma is None:
-            self.sigma = np.arange(my_spectra.shape[1])
-        else:
-            assert my_spectra.shape[1] == len(
-                sigma), "Check your Raman shifts array"
-            self.sigma = sigma
+            if sigma is None:
+                self.sigma = np.arange(self.my_spectra.shape[1])
+            else:
+                self.sigma = sigma
+        if self.my_spectra.ndim == 2:
+            self.my_spectra = self.my_spectra[:,:,np.newaxis]
+        assert self.my_spectra.shape[1] == len(
+                self.sigma), "Check your Raman shifts array. The dimensions "+\
+                f"of your spectra ({self.my_spectra.shape[1]}) and that of "+\
+                f"your Ramans shifts ({len(self.sigma)}) are not the same."
+
         self.first_frame = 0
         self.last_frame = len(self.my_spectra)-1
         self.fig, self.ax = plt.subplots()
@@ -302,8 +319,10 @@ class ShowSpectra(object):
     def titled(self, frame):
         if self.title is None:
             self.ax.set_title(f"Spectrum N° {frame} /{self.last_frame + 1}")
-        else:
+        elif isinstance(self.title, str):
             self.ax.set_title(f"{self.title} n°{frame}")
+        elif hasattr(self.title, '__iter__'):
+            self.ax.set_title(f"{self.title[frame]}")
 
     def update(self, val):
         """Use the slider to scroll through frames"""
@@ -509,19 +528,27 @@ class ShowSelected(object):
     you want to apply on the selected span."""
 
 
-    def __init__(self, map_spectra, x):
+    def __init__(self, map_spectra, x=None):
 
-        self.x = x
-        self.ny, self.nx, self.nshifts = map_spectra.shape
-        self.spectra = map_spectra.reshape(-1, self.nshifts)
-        if self.x[-1] < self.x[0]: # raman shifts are often in descending order
-            self.x = self.x[::-1]
-            self.spectra[:,::-1]
-            self.map_spectra = self.spectra.reshape(map_spectra.shape)
+        if isinstance(map_spectra, WDF):
+            self.x = map_spectra.x_values
+            self.nshifts = map_spectra.npoints
+            self.nx, self.ny = map_spectra.map_params['NbSteps'][
+                                map_spectra.map_params['NbSteps'] > 1]
+            self.spectra = map_spectra.spectra
+            self.xlabel, self.ylabel = map_spectra.map_params["StepSizes"][
+                                    map_spectra.map_params["StepSizes"] > 0]
         else:
-            self.map_spectra = map_spectra
+            self.x = x
+            self.ny, self.nx, self.nshifts = map_spectra.shape
+            self.spectra = map_spectra.reshape(-1, self.nshifts)
+        if self.x is None:
+            self.x = np.arange(self.nshifts)
+        self.spectra, self.x = pp.order(self.spectra, self.x)
+        self.map_spectra = self.spectra.reshape(self.ny, self.nx, self.nshifts)
+
         # Preparing the plot:
-        self.fig = plt.figure(figsize=(14, 10))
+        self.fig = plt.figure()
         # Add all the axes:
         self.aximg = self.fig.add_axes([.23, .3, .8, .6])
         self.axspectrum = self.fig.add_axes([.05, .075, .9, .15])
@@ -560,6 +587,9 @@ class ShowSelected(object):
 
         # Plot the empty image:
         self.imup = self.aximg.imshow(np.empty_like(self.map_spectra[:,:,0]))
+        if isinstance(map_spectra, WDF):
+            self.aximg.set_xlabel(f"units :  {self.xlabel:.1g}")
+            self.aximg.set_ylabel(f"units :  {self.ylabel:.1g}")
         plt.show()
 
     def determine_func(self, label):

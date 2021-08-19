@@ -364,8 +364,6 @@ def read_WDF(filename, verbose=False):
     if verbose:
         print('\n\n\n')
     origins = pd.DataFrame(origin_values.T,
-                           columns=[origin_labels,
-                                    origin_set_dtypes,
-                                    origin_set_units])
+                           columns=[f"{x} ({d})" for (x, d) in zip(origin_labels, origin_set_units)])
 
     return (spectra, x_values, params, map_params, origins)
