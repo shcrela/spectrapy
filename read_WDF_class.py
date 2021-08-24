@@ -182,8 +182,8 @@ class WDF(object):
             _read(f)
             self.map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3), 2)
             self.map_params['StepSizes'] = np.round(_read(f, '<f', count=3), 2)
-            self.map_params['NbSteps'] = self.n_x, self.n_y, self.n_z \
-                                       = _read(f, np.uint32, count=3)
+            self.map_params['NbSteps'] = _read(f, np.uint32, count=3)
+            self.n_x, self.n_y = self.map_params["NbSteps"][self.map_params["NbSteps"]>1]
             self.map_params['LineFocusSize'] = _read(f)
         if self.verbose:
             for key, val in self.map_params.items():
@@ -202,23 +202,9 @@ class WDF(object):
                 print(f'{"The number of points in each spectra":-<40s} : \t'
                       f'{self.spectra.shape[1]}')
             if self.params['MeasurementType'] == 'Map':
-                if self.map_params['MapAreaType'] == 'InvertedRows':
-                    self.spectra = [self.spectra[((xx//self.n_x)+1)*self.n_x-(xx % self.n_x)-1]
-                               if (xx//self.n_x) % 2 == 1
-                               else self.spectra[xx]
-                               for xx in range(self.nspectra)]
-                    self.spectra = np.asarray(self.spectra)
-                    if verbose:
-                        print('*It seems your file was recorded using the'
-                              '"Inverted Rows" scan type'
-                              '(sometimes also reffered to as "Snake").\n '
-                              'Note that the spectra will be rearanged'
-                              'so it could be read\n'
-                              'the same way as other scan types'
-                              '(from left to right, and from top to bottom)')
-                if self.map_params['MapAreaType'] in ['Alternating', 'StreamLine']:
-                    self.spectra = self.spectra.reshape(self.n_x, self.n_y, -1)
-                    self.spectra = np.rot90(self.spectra, axes=(0, 1)).reshape(self.n_x*self.n_y, -1)
+                self.spectra = reorder(self.spectra, self.n_x, self.n_y,
+                                       self.map_params["MapAreaType"])
+
 
         name = 'XLST'
         gen = [i for i, x in enumerate(self.block_names) if x == name]
@@ -281,18 +267,9 @@ class WDF(object):
                         _read(f, '<d', count=self.nspectra), 2)
 
                 if self.params['MeasurementType'] == 'Map':
-                    if self.map_params['MapAreaType'] == 'InvertedRows':
-                        # To put the "Inverted Rows" into the
-                        # "from left to right" order
-                        origin_values[set_n] = [origin_values[set_n]
-                                                [((xx//self.n_x)+1)*self.n_x-(xx % self.n_x)-1]
-                                                if (xx//self.n_x) % 2 == 1
-                                                else origin_values[set_n][xx]
-                                                for xx in range(self.nspectra)]
-                        origin_values[set_n] = np.asarray(origin_values[set_n])
-                    if self.map_params['MapAreaType']  in ['Alternating', 'StreamLine']:
-                        ovl = origin_values[set_n].reshape(self.n_x, self.n_y)
-                        origin_values[set_n] = np.rot90(ovl, axes=(0, 1)).ravel()
+                    origin_values[set_n] = reorder(origin_values[set_n],
+                                                   self.n_x, self.n_y,
+                                                   self.map_params['MapAreaType'])
         if self.verbose:
             print('\n\n\n')
         self.origins = pd.DataFrame(origin_values.T,
