@@ -2,10 +2,15 @@
 from __future__ import print_function
 import numpy as np
 import os
+import io
 import time
 import pandas as pd
+from PIL import Image, ImageFile
 import constants_WDF_class as const
 import visualize as vis
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 
 def convert_time(t):
     """Convert the Windows 64bit timestamp to human readable format.
@@ -28,7 +33,13 @@ def convert_time(t):
     return time.strftime('%c', time.gmtime((t/1e7-11644473600)))
 
 
-def reorder(ar, nx, ny, method):
+def reorder(ar, n_columns, n_rows, method):
+    nx = n_columns
+    ny = n_rows
+    vertical = ["Alternating", "StreamLine", "Alternating2"]
+    if method in ["StreamLine", "Alternating2"]: # need to inverse, because the order is different
+        nx = n_rows
+        ny = n_columns
     if ar.ndim == 1:
         arr = ar.reshape(ny, nx)
     elif ar.ndim == 2:
@@ -37,7 +48,7 @@ def reorder(ar, nx, ny, method):
         print("WTF?!")
     if method == "InvertedRows":
         reordered = np.array([arr[i][::-1] if i&1 else arr[i] for i in range(ny)])
-    elif method in ["Alternating", "StreamLine"]:
+    elif method in vertical:
         reordered = np.rot90(arr, axes=(0, 1))
     else:
         reordered = arr
@@ -219,8 +230,7 @@ class WDF(object):
             print(f"*These are the \"{self.params['XlistDataType']}"
                   f"\" recordings in \"{self.params['XlistDataUnits']}\" units")
 
-    # The next block is where the image is stored (if recorded)
-    # When y_values_count > 1, there should be an image.
+    # It is not clear what the next block is for:
         name = 'YLST'
         gen = [i for i, x in enumerate(self.block_names) if x == name]
         for i in gen:
@@ -228,18 +238,59 @@ class WDF(object):
             f.seek(self.b_off[i] + 16)
             self.params['YlistDataType'] = const.DATA_TYPES[_read(f)]
             self.params['YlistDataUnits'] = const.DATA_UNITS[_read(f)]
-            self.y_values_count = int((self.block_sizes[i]-24)/4)
-            # if y_values_count > 1, we can say that this is the number of pixels
-            # in the recorded microscope image
-            if self.y_values_count > 1:
-                self.y_values = _read(f, '<f', count=self.y_values_count)
+            self.test_ylist = _read(f)
+            if self.block_sizes[i] > 28:
+                self.y_values = _read(f, '<f', count=int((self.block_sizes[i]-16)/4))
                 if self.verbose:
-                    print("There seem to be the image recorded as well")
+                    print("There's something here!")
                     print(f"{'Its size is':-<40s} : \t{self.y_values.shape}")
             else:
                 if self.verbose:
-                    print("*No image was found.")
+                    print("*Nothing here.")
+        
+        name = 'WHTL'
+        gen = [i for i, x in enumerate(self.block_names) if x == name]
+        for i in gen:
+            self.print_block_header(name,i)
+            f.seek(self.b_off[i] + 16)
+            img_bytes = _read(f, count=int((self.block_sizes[i]-16)/4))
+            img = Image.open(io.BytesIO(img_bytes))
+            self.img_arr = np.array(img.getdata()).reshape(
+                                        img.size[1], img.size[0], -1)
+            self.img_exif = dict()
+            for tag, value in img._getexif().items():
+                decodedTag = const.EXIF_TAGS[tag]
+                self.img_exif[decodedTag] = value
+            
+        name = 'WXDB'        
+        gen = [i for i, x in enumerate(self.block_names) if x == name]
+        if len(gen) > 0:
+            self.imgs = []
+            self.img_sizes = []
+            self.img_psets = dict()
+            for i in gen:
+                self.print_block_header(name,i)
+                f.seek(self.b_off[i] + 16)
+                self.img_offsets = _read(f, dtype='u8', count=self.nspectra)
+                for nn, j in enumerate(self.img_offsets):
+                    f.seek(int(j+self.b_off[i]))
+                    size = _read(f)
+                    self.img_sizes.append(size)
+                    img_type = _read(f, dtype=np.uint8)
+                    img_flag = _read(f, dtype=np.uint8)
+                    img_key = _read(f, dtype=np.uint16)
+                    img_size = _read(f)
+                    img_length = _read(f)
+                    self.img_psets[nn] = {"img_type": img_type,
+                                     "img_flag": img_flag,
+                                     "img_key": img_key,
+                                     "img_size": img_size,
+                                     "img_length": img_length}
 
+    #                 img_bytes = _read(f, count=int(size/4 -1))
+    #                 self.imgs.append(io.BytesIO(img_bytes))
+            
+            
         name = 'ORGN'
         origin_labels = []
         origin_set_dtypes = []

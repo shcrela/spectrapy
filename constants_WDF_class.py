@@ -7,6 +7,11 @@ Created on Thu Aug 19 13:43:34 2021
 """
 import numpy as np
 
+BLOCK_NAMES = ['WDF1',
+               'DATA',
+               'YLST'
+              ]
+
 DATA_TYPES = ['Arbitrary',
               'Spectral',
               'Intensity',
@@ -105,6 +110,21 @@ WDF_FLAGS = {0: 'WdfXYXY',
              7: 'WdfSlice',
              8: 'WdfPQ',
              16: 'UnknownFlag (check in WiRE?)'}
+
+
+EXIF_TAGS = {
+             # Renishaw's particular tags:
+             65184: "FocalPlaneXYOrigins", # tuple of floats
+             65185: "FieldOfViewXY",       # tuple of floats
+             65186: "px/µ ?",           # float (1.0, 5.0?)
+             # Standard Exif tags:
+             34665: "ExifOffset",               # Normally, (114?)
+               270: "ImageDescription",         # Normally, "white-light image"
+               271: "Make",                     # Normally, "Renishaw"
+             41488: "FocalPlaneResolutionUnit", # (`5` corresponds to microns)
+             41486: "FocalPlaneXResolution",    # (27120.6?)
+             41487: "FocalPlaneYResolution"}    # (21632.1?)
+
 
 HEADER_DT = np.dtype([('block_name', '|S4'),
                       ('block_id', np.int32),
