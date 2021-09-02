@@ -5,6 +5,8 @@ import os
 import io
 import time
 import pandas as pd
+from scipy.signal import oaconvolve
+import matplotlib.pyplot as plt
 from PIL import Image, ImageFile
 import constants_WDF_class as const
 import visualize as vis
@@ -37,7 +39,7 @@ def reorder(ar, n_columns, n_rows, method):
     nx = n_columns
     ny = n_rows
     vertical = ["Alternating", "StreamLine", "Alternating2"]
-    if method in ["StreamLine", "Alternating2"]: # need to inverse, because the order is different
+    if method in ["StreamLine", "Alternating2"]: # need to inverse
         nx = n_rows
         ny = n_columns
     if ar.ndim == 1:
@@ -165,11 +167,14 @@ class WDF(object):
             self.params['ApplicationVersion'] = '.'.join(
                 [str(x) for x in version[0:-1]]) +\
                 ' build ' + str(version[-1])
-            self.params['ScanType'] = const.SCAN_TYPES[_read(f)]
-            self.params['MeasurementType'] = const.MEASUREMENT_TYPES[_read(f)]
+            m_flag = _read(f)
+            self.params['ScanType'] = const.SCAN_TYPES.get(m_flag, m_flag)
+            m_flag = _read(f)
+            self.params['MeasurementType'] = const.MEASUREMENT_TYPES.get(m_flag, m_flag)
             self.params['StartTime'] = convert_time(_read(f, np.uint64))
             self.params['EndTime'] = convert_time(_read(f, np.uint64))
-            self.params['SpectralUnits'] = const.DATA_UNITS[_read(f)]
+            m_flag = _read(f)
+            self.params['SpectralUnits'] = const.DATA_UNITS.get(m_flag, m_flag)
             self.params['LaserWaveLength'] = np.round(10e6/_read(f, '<f'), 2)
             f.seek(240)
             self.params['Title'] = _read(f, '|S160').decode()
@@ -189,7 +194,7 @@ class WDF(object):
             self.print_block_header(name, i)
             f.seek(self.b_off[i] + 16)
             m_flag = _read(f)
-            self.map_params['MapAreaType'] = const.MAP_TYPES[m_flag]  # _read(f)]
+            self.map_params['MapAreaType'] = const.MAP_TYPES.get(m_flag, m_flag)
             _read(f)
             self.map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3), 2)
             self.map_params['StepSizes'] = np.round(_read(f, '<f', count=3), 2)
@@ -222,8 +227,10 @@ class WDF(object):
         for i in gen:
             self.print_block_header(name, i)
             f.seek(self.b_off[i] + 16)
-            self.params['XlistDataType'] = const.DATA_TYPES[_read(f)]
-            self.params['XlistDataUnits'] = const.DATA_UNITS[_read(f)]
+            m_flag = _read(f)
+            self.params['XlistDataType'] = const.DATA_TYPES.get(m_flag, m_flag)
+            m_flag = _read(f)
+            self.params['XlistDataUnits'] = const.DATA_UNITS.get(m_flag, m_flag)
             self.x_values = _read(f, '<f', count=self.npoints)
         if self.verbose:
             print(f"{'The shape of the x_values is':-<40s} : \t{self.x_values.shape}")
@@ -236,8 +243,10 @@ class WDF(object):
         for i in gen:
             self.print_block_header(name, i)
             f.seek(self.b_off[i] + 16)
-            self.params['YlistDataType'] = const.DATA_TYPES[_read(f)]
-            self.params['YlistDataUnits'] = const.DATA_UNITS[_read(f)]
+            m_flag = _read(f)
+            self.params['YlistDataType'] = const.DATA_TYPES.get(m_flag, m_flag)
+            m_flag = _read(f)
+            self.params['YlistDataUnits'] = const.DATA_UNITS.get(m_flag, m_flag)
             self.test_ylist = _read(f)
             if self.block_sizes[i] > 28:
                 self.y_values = _read(f, '<f', count=int((self.block_sizes[i]-16)/4))
@@ -247,7 +256,7 @@ class WDF(object):
             else:
                 if self.verbose:
                     print("*Nothing here.")
-        
+
         name = 'WHTL'
         gen = [i for i, x in enumerate(self.block_names) if x == name]
         for i in gen:
@@ -259,10 +268,16 @@ class WDF(object):
                                         img.size[1], img.size[0], -1)
             self.img_exif = dict()
             for tag, value in img._getexif().items():
-                decodedTag = const.EXIF_TAGS[tag]
+                decodedTag = const.EXIF_TAGS.get(tag, tag)
                 self.img_exif[decodedTag] = value
-            
-        name = 'WXDB'        
+            try:
+                dunit = self.img_exif["FocalPlaneResolutionUnit"]
+                self.img_exif["FocalPlaneResolutionUnit"] = \
+                const.DATA_UNITS.get(dunit, dunit)
+            except:
+                pass
+
+        name = 'WXDB'
         gen = [i for i, x in enumerate(self.block_names) if x == name]
         if len(gen) > 0:
             self.imgs = []
@@ -289,8 +304,8 @@ class WDF(object):
 
     #                 img_bytes = _read(f, count=int(size/4 -1))
     #                 self.imgs.append(io.BytesIO(img_bytes))
-            
-            
+
+
         name = 'ORGN'
         origin_labels = []
         origin_set_dtypes = []
@@ -307,8 +322,10 @@ class WDF(object):
                 data_type_flag = _read(f).astype(np.uint16)
                 # not sure why I had to add the astype part,
                 # but if I just read it as uint32, I got rubbish sometimes
-                origin_set_dtypes.append(const.DATA_TYPES[data_type_flag])
-                origin_set_units.append(const.DATA_UNITS[_read(f)])
+                origin_set_dtypes.append(const.DATA_TYPES.get(data_type_flag,
+                                                              data_type_flag))
+                m_flag = _read(f)
+                origin_set_units.append(const.DATA_UNITS.get(m_flag, m_flag))
                 origin_labels.append(_read(f, '|S16').decode())
                 if data_type_flag == 11:
                     origin_values[set_n] = _read(f, np.uint64, count=self.nspectra)
@@ -326,7 +343,74 @@ class WDF(object):
         self.origins = pd.DataFrame(origin_values.T,
                                columns=[f"{x} ({d})" for (x, d) in \
                                         zip(origin_labels, origin_set_units)])
+        try:
+            self.xres = float(self.img_exif["FocalPlaneXResolution"]) /\
+                    self.img_arr.shape[1]  # in µ/px
+            self.yres = float(self.img_exif["FocalPlaneYResolution"]) /\
+                    self.img_arr.shape[0]  # in µ/px
 
+            self.xminpx, self.yminpx = (round(
+                                        (self.map_params["InitialCoordinates"][0] -
+                                         self.img_exif["FocalPlaneXYOrigins"][0])
+                                           /self.xres),
+                                        round(
+                                        (self.map_params["InitialCoordinates"][1] -
+                                         self.img_exif["FocalPlaneXYOrigins"][1])
+                                           /self.yres))
+
+            self.xmaxpx = self.xminpx + round(self.map_params["StepSizes"][0] *
+                                              self.map_params["NbSteps"][0] / self.xres)
+            self.ymaxpx = self.yminpx + round(self.map_params["StepSizes"][1] *
+                                              self.map_params["NbSteps"][1] / self.yres)
+
+            self.xminpx, self.xmaxpx = np.sort([self.xminpx, self.xmaxpx])
+            self.yminpx, self.ymaxpx = np.sort([self.yminpx, self.ymaxpx])
+
+            self.xsizepx = self.xmaxpx - self.xminpx
+            self.ysizepx = self.ymaxpx - self.yminpx
+            grid_in_image = (self.xsizepx <= np.size(self.img_arr, 1)) &\
+                            (self.ysizepx <= np.size(self.img_arr, 0))
+            if grid_in_image:
+                kernel_shape = np.abs(np.array((
+                                round(self.map_params['StepSizes'][0]/self.xres),
+                                round(self.map_params['StepSizes'][1]/self.yres))))
+                kernel = np.zeros(kernel_shape, dtype=bool)
+
+                xpx_off = int((self.n_x * kernel_shape[1] - self.xsizepx)/2) # + 1
+                ypx_off = int((self.n_y * kernel_shape[0] - self.ysizepx)/2) # + 1
+
+                cropped_img = self.img_arr[self.yminpx-ypx_off : self.ymaxpx+ypx_off,\
+                                           self.xminpx-xpx_off : self.xmaxpx+xpx_off,:]
+
+                # ydim = np.size(cropped_img, 0)//kernel_shape[0]
+                # xdim = np.size(cropped_img, 1)//kernel_shape[1]
+                if self.params["ScanType"] in ["StreamLine", "StreamLineHR"]:
+                    kernel[:, round(kernel_shape[1]/2)] = 1
+                elif self.params["ScanType"] in ["Point", "Static"]:
+                    kernel[round(kernel_shape[1]/2), round(kernel_shape[1]/2)] = 1
+                else:
+                    kernel = 1
+                self.img_reduced = oaconvolve(cropped_img,
+                                    kernel[:,:,None],
+                                    'valid')[::kernel_shape[0],::kernel_shape[1],:]
+                self.img_reduced = (255 * self.img_reduced /\
+                                    self.img_reduced.max()).astype(int)
+        except:
+            print("Problem loading image")
+
+    def show_grid(self):
+        fig, ax = plt.subplots()
+        ax.imshow(self.img_arr)
+        # map_zone = Rectangle((self.xminpx, self.yminpx), self.xsizepx, self.ysizepx)
+        # ax.add_patch(map_zone)
+        x_pxvals = np.linspace(self.xminpx, self.xmaxpx, self.map_params["NbSteps"][0])
+        y_pxvals = np.linspace(self.yminpx, self.ymaxpx, self.map_params["NbSteps"][1])
+        for xxx in x_pxvals:
+            ax.vlines(xxx, ymin=self.yminpx, ymax=self.ymaxpx, lw=1, alpha=0.2)
+        for yyy in y_pxvals:
+            ax.hlines(yyy, xmin=self.xminpx, xmax=self.xmaxpx, lw=1, alpha=0.2)
+        ax.scatter(self.xminpx, self.yminpx, marker="X", s=50, c='r')
+        fig.show()
 
     def print_block_header(self, name, i):
         if self.verbose:

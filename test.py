@@ -18,8 +18,8 @@ import calculate as cc
 folder = "../../Raman/Data/Chloe/prob/"
 file = "sableindien-x5-532streamline-map1.wdf"
 
-folder = "../../Raman/Data/Giuseppe/"
-file = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
+# folder = "../../Raman/Data/Giuseppe/"
+# file = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
 filename = folder + file
 
 rawspectra, x_values, params, map_params, origins = read_WDF(filename)
@@ -35,7 +35,7 @@ saturated_indices = pp.find_saturated(rawspectra)
 # Replace the zeros with max values
 for i in saturated_indices:
     rawspectra[i][rawspectra[i]==0] = np.max(rawspectra[i])
-    
+
 zero_indices = pp.find_zeros(rawspectra)
 # Combine the saturated and zeros
 zero_saturated_idx = np.union1d(saturated_indices, zero_indices)
