@@ -370,7 +370,9 @@ class WDF(object):
             self.ysizepx = self.ymaxpx - self.yminpx
             grid_in_image = (self.xsizepx <= np.size(self.img_arr, 1)) &\
                             (self.ysizepx <= np.size(self.img_arr, 0))
-            if grid_in_image:
+            reducing_makes_sense = (self.xres < self.map_params["StepSizes"][0]) &\
+                                   (self.xres < self.map_params["StepSizes"][0])
+            if grid_in_image :
                 kernel_shape = np.abs(np.array((
                                 round(self.map_params['StepSizes'][0]/self.xres),
                                 round(self.map_params['StepSizes'][1]/self.yres))))
@@ -384,17 +386,21 @@ class WDF(object):
 
                 # ydim = np.size(cropped_img, 0)//kernel_shape[0]
                 # xdim = np.size(cropped_img, 1)//kernel_shape[1]
-                if self.params["ScanType"] in ["StreamLine", "StreamLineHR"]:
-                    kernel[:, round(kernel_shape[1]/2)] = 1
-                elif self.params["ScanType"] in ["Point", "Static"]:
-                    kernel[round(kernel_shape[1]/2), round(kernel_shape[1]/2)] = 1
+                if reducing_makes_sense:
+                    if self.params["ScanType"] in ["StreamLine", "StreamLineHR"]:
+                        kernel[:, round(kernel_shape[1]/2)] = 1
+                    elif self.params["ScanType"] in ["Point", "Static"]:
+                        kernel[round(kernel_shape[1]/2), round(kernel_shape[1]/2)] = 1
+                    else:
+                        kernel = 1
+                    self.img_reduced = oaconvolve(cropped_img,
+                                        kernel[:,:,None],
+                                        'valid')[::kernel_shape[0],::kernel_shape[1],:]
+                    self.img_reduced = (255 * self.img_reduced /\
+                                        self.img_reduced.max()).astype(int)
                 else:
-                    kernel = 1
-                self.img_reduced = oaconvolve(cropped_img,
-                                    kernel[:,:,None],
-                                    'valid')[::kernel_shape[0],::kernel_shape[1],:]
-                self.img_reduced = (255 * self.img_reduced /\
-                                    self.img_reduced.max()).astype(int)
+                    self.img_reduced = self.img_arr[self.yminpx : self.ymaxpx,\
+                                                    self.xminpx : self.xmaxpx]
         except:
             print("Problem loading image")
 
